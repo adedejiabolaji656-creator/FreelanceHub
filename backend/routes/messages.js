@@ -41,7 +41,7 @@ router.post('/', auth, async (req, res, next) => {
     await message.save();
     await message.populate('sender', 'name avatar');
 
-    req.io.to(recipient).emit('newMessage', message);
+    if (req.io && typeof req.io.to === 'function') req.io.to(recipient).emit('newMessage', message);
     res.status(201).json(message);
   } catch (err) { next(err); }
 });

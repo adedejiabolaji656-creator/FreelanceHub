@@ -2,7 +2,11 @@ import { useState, useEffect } from 'react'
 import { useParams, useNavigate } from 'react-router-dom'
 import { useAuth } from '../context/AuthContext'
 import api from '../services/api'
+import { JobDetailSkeleton } from '../components/Skeletons'
+import { timeAgo } from '../utils/time'
 import { CurrencyDollarIcon, ClockIcon, ChartBarIcon, UserIcon, CheckCircleIcon } from '@heroicons/react/24/outline'
+
+const sleep = ms => new Promise(resolve => setTimeout(resolve, ms))
 
 export default function JobDetail() {
   const { id } = useParams()
@@ -21,7 +25,9 @@ export default function JobDetail() {
 
   const fetchJob = async () => {
     try {
-      const res = await api.get(`/jobs/${id}`)
+      setLoading(true)
+      // Minimum display time so the skeleton doesn't just flicker
+      const [res] = await Promise.all([api.get(`/jobs/${id}`), sleep(400)])
       setJob(res.data)
       if (user?.role === 'client' && res.data.client._id === user._id) {
         const propRes = await api.get(`/proposals/job/${id}`)
@@ -68,7 +74,7 @@ export default function JobDetail() {
     }
   }
 
-  if (loading) return <div className="flex justify-center py-20"><div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary-600 dark:border-primary-400"></div></div>
+  if (loading) return <JobDetailSkeleton />
   if (!job) return <div className="text-center py-20 text-gray-500 dark:text-gray-400">Job not found</div>
 
   const isClient = user?.role === 'client'
@@ -86,7 +92,7 @@ export default function JobDetail() {
             <span className={`badge ${job.status === 'open' ? 'bg-success/10 text-success' : job.status === 'in-progress' ? 'bg-warning/10 text-warning' : 'bg-gray-100 text-gray-600 dark:bg-gray-700 dark:text-gray-300'}`}>
               {job.status}
             </span>
-            <span className="text-sm text-gray-500 dark:text-gray-400">{new Date(job.createdAt).toLocaleDateString()}</span>
+            <span className="text-sm text-gray-500 dark:text-gray-400">Posted {timeAgo(job.createdAt)}</span>
           </div>
           <div className="flex items-center gap-2 flex-wrap mb-4">
             <h1 className="text-2xl font-bold dark:text-white">{job.title}</h1>

@@ -1,12 +1,25 @@
 import { useState, useEffect } from 'react'
 import { Link } from 'react-router-dom'
 import api from '../services/api'
+import { JobListSkeleton } from '../components/Skeletons'
+import { timeAgo } from '../utils/time'
 import { MagnifyingGlassIcon, CurrencyDollarIcon, BriefcaseIcon } from '@heroicons/react/24/outline'
+
+const sleep = ms => new Promise(resolve => setTimeout(resolve, ms))
 
 export default function Jobs() {
   const [jobs, setJobs] = useState([])
   const [loading, setLoading] = useState(true)
+  const [searchInput, setSearchInput] = useState('')
   const [filters, setFilters] = useState({ search: '', category: '', minBudget: '', maxBudget: '', experienceLevel: '' })
+
+  // Debounce the search box so typing doesn't flash a loading state on every keystroke
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      setFilters(f => (f.search === searchInput ? f : { ...f, search: searchInput }))
+    }, 350)
+    return () => clearTimeout(timer)
+  }, [searchInput])
 
   useEffect(() => {
     fetchJobs()
@@ -17,7 +30,8 @@ export default function Jobs() {
       setLoading(true)
       const params = new URLSearchParams()
       Object.entries(filters).forEach(([k, v]) => { if (v) params.append(k, v) })
-      const res = await api.get(`/jobs?${params}`)
+      // Hold skeletons on screen for a moment so the transition feels natural
+      const [res] = await Promise.all([api.get(`/jobs?${params}`), sleep(450)])
       setJobs(res.data)
     } catch (err) {
       console.error(err)
@@ -38,7 +52,9 @@ export default function Jobs() {
             <BriefcaseIcon className="w-8 h-8 text-primary-600 dark:text-primary-400" />
             Find Work
           </h1>
-          <p className="text-gray-500 dark:text-gray-400 mt-1">{jobs.length} open jobs available</p>
+          <p className="text-gray-500 dark:text-gray-400 mt-1">
+            {loading ? 'Loading open jobs…' : `${jobs.length} open jobs available`}
+          </p>
         </div>
       </div>
 
@@ -47,7 +63,7 @@ export default function Jobs() {
           <div className="flex-1 relative">
             <MagnifyingGlassIcon className="w-5 h-5 absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 dark:text-gray-500" />
             <input type="text" placeholder="Search jobs..." className="input pl-10"
-              value={filters.search} onChange={e => setFilters({...filters, search: e.target.value})} />
+              value={searchInput} onChange={e => setSearchInput(e.target.value)} />
           </div>
           <select className="input lg:w-48" value={filters.category} onChange={e => setFilters({...filters, category: e.target.value})}>
             <option value="">All Categories</option>
@@ -67,7 +83,10 @@ export default function Jobs() {
           </div>
         </div>
         {activeFilters > 0 && (
-          <button onClick={() => setFilters({ search: '', category: '', minBudget: '', maxBudget: '', experienceLevel: '' })}
+          <button onClick={() => {
+            setSearchInput('')
+            setFilters({ search: '', category: '', minBudget: '', maxBudget: '', experienceLevel: '' })
+          }}
             className="text-sm text-primary-600 hover:underline dark:text-primary-400">
             Clear all filters ({activeFilters})
           </button>
@@ -75,13 +94,15 @@ export default function Jobs() {
       </div>
 
       {loading ? (
-        <div className="flex justify-center py-20"><div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary-600 dark:border-primary-400"></div></div>
+        <JobListSkeleton count={6} />
       ) : jobs.length === 0 ? (
         <div className="card text-center py-20 text-gray-500 dark:text-gray-400 dark:bg-gray-800">No jobs found matching your criteria.</div>
       ) : (
         <div className="grid gap-4">
-          {jobs.map(job => (
-            <Link key={job._id} to={`/jobs/${job._id}`} className="card hover:shadow-md hover:border-primary-200 transition-all dark:hover:border-primary-700">
+          {jobs.map((job, i) => (
+            <Link key={job._id} to={`/jobs/${job._id}`}
+              className="card hover:shadow-md hover:border-primary-200 transition-all fade-in-up dark:hover:border-primary-700"
+              style={{ animationDelay: `${Math.min(i, 8) * 45}ms` }}>
               <div className="flex justify-between items-start">
                 <div className="flex-1">
                   <div className="flex items-center gap-2 mb-1">
@@ -98,10 +119,11 @@ export default function Jobs() {
                     <span className="flex items-center gap-1"><CurrencyDollarIcon className="w-4 h-4 text-success" /> ${job.budget.min}-${job.budget.max} <span className="capitalize">{job.budget.type}</span></span>
                     <span className="capitalize">{job.experienceLevel} Level</span>
                     <span>{job.proposalsCount} proposals</span>
+                    <span className="hidden sm:inline">Posted {timeAgo(job.createdAt)}</span>
                   </div>
                 </div>
                 <div className="text-right ml-4 hidden sm:block shrink-0">
-                  <span className="text-xs text-gray-400 dark:text-gray-500">{new Date(job.createdAt).toLocaleDateString()}</span>
+                  <span className="text-xs text-gray-400 dark:text-gray-500" title={new Date(job.createdAt).toLocaleString()}>{timeAgo(job.createdAt)}</span>
                 </div>
               </div>
             </Link>
